@@ -1,0 +1,15 @@
+# 1. Secrets
+.env
+.env.*
+grafana_admin_password.txt
+
+# 2. Persistent Local Data (Do not upload TSDB or SQLite graphs)
+data/
+prometheus_data/
+grafana_data/
+*.db
+*.sqlite3
+
+# 3. Logs
+logs/
+*.log

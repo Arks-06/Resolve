@@ -1,0 +1,12 @@
+[project]
+name = "graph"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-core>=1.4.8",
+    "langgraph>=1.2.6",
+    "mypy>=2.1.0",
+    "ruff>=0.15.20",
+]

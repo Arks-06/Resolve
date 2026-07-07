@@ -1,0 +1,26 @@
+# 1. Environment & API Keys (Crucial for LLMs)
+.env
+.env.*
+!.env.example
+
+# 2. Virtual Environments
+.venv/
+venv/
+env/
+
+# 3. Python Cache & Build
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# 4. Local Checkpointer State (if testing with SQLite)
+*.sqlite3
+*.db
+*.log
+
+# 5. OS & IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

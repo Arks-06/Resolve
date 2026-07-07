@@ -1,0 +1,31 @@
+# 1. Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# 2. Virtual Environments
+.venv/
+venv/
+env/
+
+# 3. Python Cache & Build
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 4. Celery & Infrastructure Logs
+*.log
+celerybeat-schedule
+celerybeat.pid
+*.sqlite3
+*.db
+
+# 5. OS & IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
