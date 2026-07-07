@@ -5,8 +5,7 @@ Bootstraps the foundational schemas required before the application can accept i
 
 import asyncio
 from sqlalchemy import text
-from app.database.session import engine, Base
-import app.database.model  # Ensures declarative models are registered on Base metadata
+from app.database.session import engine, Base # Ensures declarative models are registered on Base metadata
 
 async def bootstrap_database() -> None:
     """Creates the structural tables and installs vector extension dependencies natively."""

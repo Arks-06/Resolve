@@ -5,7 +5,7 @@ Mounts the modular API routers, configures CORS for the frontend, and binds glob
 
 import time
 import sentry_sdk
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
 

@@ -3,11 +3,11 @@ Instantiates the distributed Celery task architecture, pointing to Redis as both
 Patches the Windows-specific asyncio event loop policies to prevent background worker socket crashes.
 """
 
-import os
 import sys
 import asyncio
 from dotenv import load_dotenv
 from celery import Celery
+from app.core.config import settings
 
 # Enforce standard selector policy on Windows to prevent Proactor teardown socket crashes
 if sys.platform == 'win32':
@@ -16,7 +16,6 @@ if sys.platform == 'win32':
 # Explicitly load the .env file into the worker's OS environment
 load_dotenv()
 
-from app.core.config import settings
 
 # Initialize distributed task queue with Redis acting as both message broker and result backend
 celery_app = Celery(

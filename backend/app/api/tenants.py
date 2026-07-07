@@ -4,7 +4,6 @@ Provides the secure vaulting endpoints to store third-party API credentials (lik
 """
 
 import uuid
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession

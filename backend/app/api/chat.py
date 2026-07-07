@@ -50,7 +50,7 @@ async def process_agentic_interaction(
         
     prompt_query = await db.execute(
         select(TenantPrompt)
-        .where(TenantPrompt.tenant_id == tenant_id, TenantPrompt.prompt_key == "refund_agent", TenantPrompt.is_active == True)
+        .where(TenantPrompt.tenant_id == tenant_id, TenantPrompt.prompt_key == "refund_agent", TenantPrompt.is_active.is_(True))
     )
     active_prompt = prompt_query.scalar_one_or_none()
     prompt_text = active_prompt.prompt_text if active_prompt else "Default system behavior active."
