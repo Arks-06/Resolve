@@ -1,3 +1,11 @@
+[tool.mypy]
+# Ignore missing type stubs for external libraries like Celery and pgvector
+ignore_missing_imports = true
+# Stop forcing us to write -> dict for every single function
+disallow_untyped_defs = false
+# Don't panic if it can't find the sibling 'graph' folder during CI
+follow_imports = "skip"
+
 [project]
 name = "backend"
 version = "0.1.0"

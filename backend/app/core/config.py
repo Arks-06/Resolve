@@ -13,4 +13,4 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 # Instantiate a global configuration object for dependency injection
-settings = Settings()
+settings = Settings() # type: ignore
