@@ -6,7 +6,7 @@ Injects Langfuse OpenTelemetry tracking and handles synchronous database logging
 import sys
 import os
 
-# System path injection must occur at the absolute top
+# System path injection must occur at the beginning
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 import json
@@ -52,20 +52,21 @@ class LangGraphExecutionTask(Task):
         super().on_failure(exc, task_id, args, kwargs, einfo)
 
 @celery_app.task(bind=True, base=LangGraphExecutionTask, max_retries=3, autoretry_for=(Exception,), retry_backoff=True)
-def execute_agentic_workflow(self, tenant_id: str, user_query: str, active_prompt: str, is_resume: bool = False):
+def execute_agentic_workflow(self, tenant_id: str, user_query: str, active_prompt: str, is_resume: bool = False, thread_id: str = None):
     """
     Executes or resumes the deterministic state graph asynchronously.
     Injects Langfuse tracing and Postgres state checkpointing.
     """
-    task_id = self.request.id
+    current_task_id = self.request.id
+    
+    active_thread_id = thread_id if thread_id else current_task_id
     
     # Thread ID enforces strictly isolated conversational memory states per transaction
     run_config = {
-        "configurable": {"thread_id": task_id},
+        "configurable": {"thread_id": active_thread_id}, 
         "callbacks": [langfuse_handler]
     }
     
-    # Instantiate without the context manager 'with' statement
     checkpointer = PostgresSaver(pool)
     checkpointer.setup()
     
@@ -85,7 +86,7 @@ def execute_agentic_workflow(self, tenant_id: str, user_query: str, active_promp
     # Flush Langfuse telemetry buffer to external cloud
     get_client().flush()
     
-    # Determine if execution halted at the interrupt boundary or reached END
+    # Determine if execution halted at the interrupt boundary or reached end
     current_state = decision_engine.get_state(run_config)
     if current_state.next:
         return {"status": "PAUSED_FOR_HUMAN_AUDIT", "pending_node": current_state.next[0]}
@@ -104,7 +105,7 @@ def execute_agentic_workflow(self, tenant_id: str, user_query: str, active_promp
             INSERT INTO tenant_cost_logs (tenant_id, transaction_ref, model_name, prompt_tokens, completion_tokens, total_cost_usd, timestamp) 
             VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """,
-            (tenant_id, task_id, "llama-3.3-70b-versatile", usage_data["input_tokens"], usage_data["output_tokens"], total_cost)
+            (tenant_id, active_thread_id, "llama-3.3-70b-versatile", usage_data["input_tokens"], usage_data["output_tokens"], total_cost)
         )
     
     return {

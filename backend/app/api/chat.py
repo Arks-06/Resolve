@@ -15,10 +15,10 @@ from sqlalchemy import select
 from celery.result import AsyncResult
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
-
+from app.queue.celery_app import celery_app
 from app.database.session import get_db_session
 from app.database.model import Tenant, TenantPrompt
-from app.queue.tasks import execute_agentic_workflow
+from app.queue.tasks import execute_agentic_workflow, pool
 from app.core.config import settings
 from graph.workflow import compile_decision_engine
 
@@ -68,54 +68,80 @@ async def process_agentic_interaction(
 
 @router.get("/status/{task_id}")
 async def get_task_status(task_id: str):
-    """
-    Retrieves the execution status and final payload of a dispatched background task.
-    """
-    task_result = AsyncResult(task_id)
+    """Checks Celery status, and checks LangGraph memory if paused."""
+    # Check standard Celery status
+    task_result = celery_app.AsyncResult(task_id)
     
-    if task_result.state == 'PENDING' or task_result.state == 'STARTED':
-        return {"task_id": task_id, "status": "PROCESSING"}
-    elif task_result.state == 'SUCCESS':
-        return {"task_id": task_id, "status": "COMPLETED", "result": task_result.result}
-    elif task_result.state == 'FAILURE':
-        return {"task_id": task_id, "status": "FAILED", "error": str(task_result.info)}
-    else:
-        return {"task_id": task_id, "status": task_result.state}
+    # check if Celery thinks it's paused
+    if task_result.status in ["SUCCESS", "COMPLETED"]:
+        inner_result = task_result.result or {}
+        
+        if inner_result.get("status") == "PAUSED_FOR_HUMAN_AUDIT":
+            checkpointer = PostgresSaver(pool)
+            checkpointer.setup()
+            decision_engine = compile_decision_engine(checkpointer=checkpointer)
+            
+            # Use the original task_id as the thread_id
+            state = decision_engine.get_state({"configurable": {"thread_id": task_id}})
+            
+            # If state.next is empty, the graph crossed the boundary and finished
+            if state and not state.next:
+                final_msg = state.values["messages"][-1].content
+                return {
+                    "status": "COMPLETED", 
+                    "result": {
+                        "status": "COMPLETED", 
+                        "response": final_msg
+                    }
+                }
+
+    # it's still running, or genuinely paused and untouched, return normal status
+    return {"status": task_result.status, "result": task_result.result}
+
 
 @router.get("/state/{task_id}")
 async def get_graph_state(task_id: str):
-    """
-    Reads the serialized memory state of a specific graph thread directly from the PostgreSQL checkpointer.
-    Utilized by the frontend dashboard to display pending actions awaiting human override.
-    """
-    run_config = {"configurable": {"thread_id": task_id}}
-    
-    # Instantiate without the context manager 'with' statement
-    checkpointer = PostgresSaver(checkpointer_pool)
+    """Extracts the exact readable memory dict for the Admin UI."""
+    checkpointer = PostgresSaver(pool)
+    checkpointer.setup()
     decision_engine = compile_decision_engine(checkpointer=checkpointer)
-    state_snapshot = decision_engine.get_state(run_config)
     
-    if not state_snapshot:
-        raise HTTPException(status_code=404, detail="Execution state not found")
+    config = {"configurable": {"thread_id": task_id}}
+    state = decision_engine.get_state(config)
+    
+    # Safely extract the readable values dictionary
+    if not state or not hasattr(state, "values"):
+        return {"state": "No state found in PostgreSQL for this ID."}
         
-    return {
-        "task_id": task_id,
-        "next_node": state_snapshot.next,
-        "values": state_snapshot.values
-    }
+    # Convert messages to a readable format before sending to frontend
+    readable_state = {}
+    for key, value in state.values.items():
+        if key == "messages":
+            readable_state[key] = [{"type": m.type, "content": m.content} for m in value]
+        else:
+            readable_state[key] = value
+
+    return {"state": readable_state}
 
 
 @router.post("/resume/{task_id}")
 async def resume_graph_execution(task_id: str, tenant_id: str):
     """
     Dispatches a specialized resume task to the Celery broker.
-    The worker loads the persistent state associated with the task_id and crosses the interrupt boundary.
+    The worker loads the persistent state associated with the session and crosses the interrupt boundary.
     """
+    # Let Celery auto-generate a brand new task id for this second leg of the journey
     task = execute_agentic_workflow.apply_async(
-        kwargs={"tenant_id": tenant_id, "user_query": "", "active_prompt": "", "is_resume": True},
-        task_id=task_id  # Enforce identical task_id allocation for state thread continuity
+        kwargs={
+            "tenant_id": tenant_id, 
+            "user_query": "", 
+            "thread_id": task_id,  # Pass the original task_id to load the correct LangGraph memory
+            "active_prompt": "", 
+            "is_resume": True
+        }
     )
     
+    # Return the newly generated task.id back to the frontend
     return TaskDispatchResponseSchema(
         task_id=task.id,
         status="RESUMING_EXECUTION"
